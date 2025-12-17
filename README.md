@@ -19,9 +19,3 @@
 - **Структурированное логирование** (debug, info, error)
 - **Репозиторий на Git** с CI/CD готовностью
 
-##  Структура проекта
-warehouse-backend/
-├── api-service/ # API Gateway сервис
-├── data-service/ # Сервис работы с данными
-├── docker-compose.yml
-└── README.md
