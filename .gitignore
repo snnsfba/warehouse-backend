@@ -1,0 +1,13 @@
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+# Папки Go
+bin/
+pkg/
+# Настройки редакторов 
+.vscode/
+.idea/
+# Логи
+*.log
