@@ -3,11 +3,9 @@
 *.dll
 *.so
 *.dylib
-# Папки Go
 bin/
 pkg/
-# Настройки редакторов 
+.env 
 .vscode/
 .idea/
-# Логи
 *.log
