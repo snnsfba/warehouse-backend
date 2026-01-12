@@ -3,13 +3,9 @@ package main
 import (
 	"context"
 	"data-service/internal/database"
-	"data-service/internal/models"
-	"data-service/internal/repository"
 	"fmt"
 	"log"
 	"time"
-
-	"github.com/jackc/pgx/v5"
 )
 
 func main() {
@@ -39,124 +35,241 @@ func main() {
 	fmt.Printf("User: '%s'\n", cfg.User)
 	fmt.Printf("Password: '%s'\n", cfg.Password)
 
-	testCustomerRepository(conn)
+	// testCustomerRepository(conn)
 
 }
 
-func testCustomerRepository(conn *pgx.Conn) {
-	repo := repository.NewCustomerRepository(conn)
+// func testCustomerRepository(conn *pgx.Conn) {
+// 	repo := repository.NewCustomerRepository(conn)
 
-	// //TECT 1: create
+// 	// //TECT 1: create
 
-	customer1 := &models.Customer{
-		Name:        "Серега",
-		PhoneNumber: "+79778756911",
-		Address:     "Russia, Moscow",
-		Email:       "Vyacheslaavv@gmail.com",
-	}
+// 	customer1 := &models.Customer{
+// 		Name:        "Серега",
+// 		PhoneNumber: "+79778756912",
+// 		Address:     "Russia, Moscow",
+// 		Email:       "Vyachesllaavv@gmail.com",
+// 	}
 
-	err := repo.Create(context.Background(), customer1)
-	if err != nil {
-		log.Fatal("Create test failed", err)
-		return
-	}
-	fmt.Printf("Created customer ID: %d\n", customer1.CustomerID)
+// 	err := repo.Create(context.Background(), customer1)
+// 	if err != nil {
+// 		log.Fatal("Create test failed", err)
+// 		return
+// 	}
+// 	fmt.Printf("Created customer ID: %d\n", customer1.CustomerID)
 
-	// // Тест 2: Дубликат email
-	// customer2 := &models.Customer{
-	// 	Name:        "Серега",
-	// 	PhoneNumber: "+79161234567",
-	// 	Address:     "Tojikistan, Dushanbe",
-	// 	Email:       "Vyacheslav@gmail.com",
-	// }
+// 	// // Тест 2: Дубликат email
+// 	// customer2 := &models.Customer{
+// 	// 	Name:        "Серега",
+// 	// 	PhoneNumber: "+79161234567",
+// 	// 	Address:     "Tojikistan, Dushanbe",
+// 	// 	Email:       "Vyacheslav@gmail.com",
+// 	// }
 
-	// err = repo.Create(context.Background(), customer2)
-	// if err == nil || !strings.Contains(err.Error(), "already exist") {
-	// 	log.Fatal("Should reject duplicate email")
-	// }
-	// fmt.Printf("Correctly rejected duplicate email: %v\n", err)
+// 	// err = repo.Create(context.Background(), customer2)
+// 	// if err == nil || !strings.Contains(err.Error(), "already exist") {
+// 	// 	log.Fatal("Should reject duplicate email")
+// 	// }
+// 	// fmt.Printf("Correctly rejected duplicate email: %v\n", err)
 
-	// // Тест 3: Дубликат phone
-	// customer3 := &models.Customer{
-	// 	Name:        "Санек",
-	// 	PhoneNumber: "+79778756980",
-	// 	Address:     "Uzbekistan, Mbappe",
-	// 	Email:       "Pidor1488@gmail.com",
-	// }
+// 	// // Тест 3: Дубликат phone
+// 	// customer3 := &models.Customer{
+// 	// 	Name:        "Санек",
+// 	// 	PhoneNumber: "+79778756980",
+// 	// 	Address:     "Uzbekistan, Mbappe",
+// 	// 	Email:       "Pidor1488@gmail.com",
+// 	// }
 
-	// err = repo.Create(context.Background(), customer3)
-	// if err == nil || !strings.Contains(err.Error(), "already exists") {
-	// 	log.Fatal("Should reject duplicate phone")
-	// }
-	// fmt.Printf("Correctly rejected duplicate phone: %v\n", err)
+// 	// err = repo.Create(context.Background(), customer3)
+// 	// if err == nil || !strings.Contains(err.Error(), "already exists") {
+// 	// 	log.Fatal("Should reject duplicate phone")
+// 	// }
+// 	// fmt.Printf("Correctly rejected duplicate phone: %v\n", err)
 
-	// //Тест 4: Невалидный email
+// 	// //Тест 4: Невалидный email
 
-	// customer4 := &models.Customer{
-	// 	Name:        "Данек",
-	// 	PhoneNumber: "+79882132233",
-	// 	Email:       "Xyesos228",
-	// 	Address:     "Zalupaches",
-	// }
+// 	// customer4 := &models.Customer{
+// 	// 	Name:        "Данек",
+// 	// 	PhoneNumber: "+79882132233",
+// 	// 	Email:       "Xyesos228",
+// 	// 	Address:     "Zalupaches",
+// 	// }
 
-	// err = repo.Create(context.Background(), customer4)
-	// if err == nil {
-	// 	log.Fatal("should reject invalid Email", err)
-	// }
-	// fmt.Printf("Correctly rejected invalid Email: %v\n", err)
-	//
-	//
-	//
-	//
-	// Тест 5: GetByID
+// 	// err = repo.Create(context.Background(), customer4)
+// 	// if err == nil {
+// 	// 	log.Fatal("should reject invalid Email", err)
+// 	// }
+// 	// fmt.Printf("Correctly rejected invalid Email: %v\n", err)
+// 	//
+// 	//
+// 	//
+// 	//
+// 	// Тест 5: GetByID
 
-	savedCustomer, err := repo.GetByID(context.Background(), customer1.CustomerID)
-	if err != nil {
-		log.Fatal("GetByID test failed:", err)
-		return
-	}
-	fmt.Printf("Retrieved customer:\n")
-	fmt.Printf("ID: %d\n", savedCustomer.CustomerID)
-	fmt.Printf("Name: %s\n", savedCustomer.Name)
+// 	savedCustomer, err := repo.GetByID(context.Background(), customer1.CustomerID)
+// 	if err != nil {
+// 		log.Fatal("GetByID test failed:", err)
+// 		return
+// 	}
+// 	fmt.Printf("Retrieved customer:\n")
+// 	fmt.Printf("ID: %d\n", savedCustomer.CustomerID)
+// 	fmt.Printf("Name: %s\n", savedCustomer.Name)
 
-	// Тест 6: GetByID с несуществующим ID
+// 	// Тест 6: GetByID с несуществующим ID
 
-	_, err = repo.GetByID(context.Background(), 99999)
-	if err != nil {
-		fmt.Printf("Correctly got error for non-existent product: %v\n", err)
-	} else {
-		fmt.Println("Should have gotten error for non-existent product")
-	}
-	//
-	//
-	//
-	//
+// 	_, err = repo.GetByID(context.Background(), 99999)
+// 	if err != nil {
+// 		fmt.Printf("Correctly got error for non-existent product: %v\n", err)
+// 	} else {
+// 		fmt.Println("Should have gotten error for non-existent product")
+// 	}
+// 	//
+// 	//
+// 	//
+// 	//
 
-	//TECT 5: GetAll
-	customer5 := &models.Customer{
-		Name:        "Алексей",
-		PhoneNumber: "+79161112233",
-		Email:       "alexey@example.com",
-	}
-	repo.Create(context.Background(), customer5)
+// 	//TECT 5: GetAll
+// 	customer5 := &models.Customer{
+// 		Name:        "Алексей",
+// 		PhoneNumber: "+79161112233",
+// 		Email:       "alexey@example.com",
+// 	}
+// 	repo.Create(context.Background(), customer5)
 
-	allCustomers, err := repo.GetAll(context.Background())
-	if err != nil {
-		log.Fatal("GetAll failed:", err)
-	}
+// 	allCustomers, err := repo.GetAll(context.Background())
+// 	if err != nil {
+// 		log.Fatal("GetAll failed:", err)
+// 	}
 
-	fmt.Printf("Found %d customers:\n", len(allCustomers))
-	for i, c := range allCustomers {
-		fmt.Printf("  %d. ID: %d, Name: %s, Email: %s\n",
-			i+1, c.CustomerID, c.Name, c.Email)
-	}
+// 	fmt.Printf("Found %d customers:\n", len(allCustomers))
+// 	for i, c := range allCustomers {
+// 		fmt.Printf("  %d. ID: %d, Name: %s, Email: %s\n",
+// 			i+1, c.CustomerID, c.Name, c.Email)
+// 	}
 
-	// Проверяем что получили хотя бы 2 клиента
-	if len(allCustomers) < 2 {
-		log.Fatal("Should have at least 2 customers")
-	}
+// 	// Проверяем что получили хотя бы 2 клиента
+// 	if len(allCustomers) < 2 {
+// 		log.Fatal("Should have at least 2 customers")
+// 	}
 
-}
+// 	fmt.Println("\n=== Testing Update ===")
+
+// 	// 1. Получаем клиента
+// 	customer, _ := repo.GetByID(context.Background(), customer1.CustomerID)
+
+// 	// 2. Меняем на уникальный email
+// 	customer.Email = "updated-unique@example.com"
+// 	err = repo.Update(context.Background(), customer)
+// 	if err != nil {
+// 		log.Fatal("Update with unique email failed:", err)
+// 	}
+// 	fmt.Println("✅ Update with unique email successful")
+
+// 	// 3. Пробуем изменить другого клиента на тот же email
+// 	otherCustomer, _ := repo.GetByID(context.Background(), customer5.CustomerID)
+// 	otherCustomer.Email = "updated-unique@example.com" // уже занят!
+// 	err = repo.Update(context.Background(), otherCustomer)
+// 	if err == nil || !strings.Contains(err.Error(), "already exists") {
+// 		log.Fatal("Should reject duplicate email in Update")
+// 	}
+// 	fmt.Println("✅ Update correctly rejects duplicate email")
+
+// 	// 4. Пробуем обновить несуществующего клиента
+// 	fakeCustomer := &models.Customer{
+// 		CustomerID:  99999,
+// 		Name:        "Fake",
+// 		Email:       "fake@example.com",
+// 		PhoneNumber: "+79169999999",
+// 	}
+// 	err = repo.Update(context.Background(), fakeCustomer)
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("Should return ErrNotFound for non-existent customer")
+// 	}
+// 	fmt.Println("✅ Update returns ErrNotFound correctly")
+
+// 	fmt.Println("\n=== Testing Delete ===")
+
+// 	// 1. Создаем клиента для удаления
+// 	customerToDelete := &models.Customer{
+// 		Name:        "Удаляемый",
+// 		PhoneNumber: "+79167778899",
+// 		Email:       "to-delete@example.com",
+// 	}
+// 	repo.Create(context.Background(), customerToDelete)
+// 	fmt.Printf("✅ Created customer for deletion ID: %d\n", customerToDelete.CustomerID)
+
+// 	// 2. Удаляем
+// 	err = repo.Delete(context.Background(), customerToDelete.CustomerID)
+// 	if err != nil {
+// 		log.Fatal("Delete failed:", err)
+// 	}
+// 	fmt.Println("✅ Customer deleted")
+
+// 	// 3. Проверяем что удален
+// 	_, err = repo.GetByID(context.Background(), customerToDelete.CustomerID)
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("❌ Deleted customer should not be found")
+// 	}
+// 	fmt.Println("✅ GetByID returns ErrNotFound as expected")
+
+// 	// 4. Пробуем удалить несуществующего
+// 	err = repo.Delete(context.Background(), 99999)
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("❌ Should return ErrNotFound")
+// 	}
+// 	fmt.Println("✅ Delete returns ErrNotFound correctly")
+
+// 	// 5. Пробуем удалить с ID=0
+// 	err = repo.Delete(context.Background(), 0)
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("❌ Should validate ID")
+// 	}
+// 	fmt.Println("✅ Delete validates ID correctly")
+
+// 	fmt.Println("\n=== Testing GetByEmail and GetByPhoneNumber ===")
+
+// 	// Тест 1: GetByEmail существующего
+// 	customerByEmail, err := repo.GetByEmail(context.Background(), "alexey@example.com")
+// 	if err != nil {
+// 		log.Fatal("GetByEmail failed:", err)
+// 	}
+// 	fmt.Printf("✅ Found by email: %s (ID: %d)\n", customerByEmail.Name, customerByEmail.CustomerID)
+
+// 	// Тест 2: GetByEmail несуществующего
+// 	_, err = repo.GetByEmail(context.Background(), "nonexistent@example.com")
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("Should return ErrNotFound for non-existent email")
+// 	}
+// 	fmt.Println("✅ GetByEmail returns ErrNotFound correctly")
+
+// 	// Тест 3: GetByEmail с пустой строкой
+// 	_, err = repo.GetByEmail(context.Background(), "")
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("Should validate empty email")
+// 	}
+// 	fmt.Println("✅ GetByEmail validates empty email")
+
+// 	// Тест 4: GetByPhoneNumber существующего
+// 	customerByPhone, err := repo.GetByPhoneNumber(context.Background(), "+79161112233")
+// 	if err != nil {
+// 		log.Fatal("GetByPhoneNumber failed:", err)
+// 	}
+// 	fmt.Printf("✅ Found by phone: %s (ID: %d)\n", customerByPhone.Name, customerByPhone.CustomerID)
+
+// 	// Тест 5: GetByPhoneNumber несуществующего
+// 	_, err = repo.GetByPhoneNumber(context.Background(), "+79999999999")
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("Should return ErrNotFound for non-existent phone")
+// 	}
+// 	fmt.Println("✅ GetByPhoneNumber returns ErrNotFound correctly")
+
+// 	// Тест 6: GetByPhoneNumber с пустой строкой
+// 	_, err = repo.GetByPhoneNumber(context.Background(), "")
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("Should validate empty phone")
+// 	}
+// 	fmt.Println("✅ GetByPhoneNumber validates empty phone")
+// }
 
 // func testProductRepository(conn *pgx.Conn) {
 // 	repo := repository.NewProductRepository(conn)
