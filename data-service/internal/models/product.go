@@ -14,11 +14,11 @@ type Product struct {
 }
 
 type Customer struct {
-	Name         string    `json:"name"`
+	Name         string    `json:"name" validate:"required,min=2,max=255"`
 	CustomerID   int       `json:"customer_id"`
-	PhoneNumber  string    `json:"phone_number"`
+	PhoneNumber  string    `json:"phone_number" validate:"required,e164"`
 	Address      string    `json:"address"`
-	Email        string    `json:"email"`
+	Email        string    `json:"email" validate:"required,email"`
 	RegisteredAt time.Time `json:"registered_at"`
 }
 
