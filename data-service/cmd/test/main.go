@@ -3,9 +3,14 @@ package main
 import (
 	"context"
 	"data-service/internal/database"
+	"data-service/internal/models"
+	"data-service/internal/repository"
+	"errors"
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func main() {
@@ -35,9 +40,484 @@ func main() {
 	fmt.Printf("User: '%s'\n", cfg.User)
 	fmt.Printf("Password: '%s'\n", cfg.Password)
 
-	// testCustomerRepository(conn)
+	testOrderRepository(conn)
 
 }
+
+func testOrderRepository(conn *pgx.Conn) {
+	fmt.Println("\n=== Testing OrderRepository ===")
+
+	repo := repository.NewOrderRepository(conn)
+
+	// Сначала создаем тестовые данные
+	fmt.Println("Setting up test data...")
+
+	// 1. Создаем тестового клиента
+	customerRepo := repository.NewCustomerRepository(conn)
+	testCustomer := &models.Customer{
+		Name:        "Тестовый Клиент",
+		Email:       "test-order@example.com",
+		PhoneNumber: "+79169998877",
+	}
+	customerRepo.Create(context.Background(), testCustomer)
+
+	// 2. Создаем тестовые заказы напрямую через SQL
+	var orderIDs []int
+	for i := 1; i <= 3; i++ {
+		var orderID int
+		amount := float64(1000 * i)
+		conn.QueryRow(context.Background(),
+			`INSERT INTO orders (customer_id, total_amount, status)
+             VALUES ($1, $2, $3) RETURNING order_id`,
+			testCustomer.CustomerID, amount, "created",
+		).Scan(&orderID)
+		orderIDs = append(orderIDs, orderID)
+	}
+
+	fmt.Printf("✅ Created test customer ID: %d\n", testCustomer.CustomerID)
+	fmt.Printf("✅ Created test orders IDs: %v\n", orderIDs)
+
+	// === ТЕСТ 1: GetByID ===
+	fmt.Println("\n=== Testing GetByID ===")
+
+	// 1.1 Существующий заказ
+	order, err := repo.GetByID(context.Background(), orderIDs[0])
+	if err != nil {
+		log.Fatal("❌ GetByID failed:", err)
+	}
+	fmt.Printf("✅ GetByID found order: ID %d, Status: %s, Amount: %.2f\n",
+		order.OrderID, order.Status, order.TotalAmount)
+
+	// 1.2 Несуществующий заказ
+	_, err = repo.GetByID(context.Background(), 99999)
+	if err != repository.ErrNotFound {
+		log.Fatal("❌ GetByID should return ErrNotFound for non-existent order")
+	}
+	fmt.Println("✅ GetByID correctly returns ErrNotFound")
+
+	// 1.3 Невалидный ID
+	_, err = repo.GetByID(context.Background(), 0)
+	if !errors.Is(err, repository.ErrInvalidInput) {
+		log.Fatal("❌ GetByID should validate ID")
+	}
+	fmt.Println("✅ GetByID validates ID correctly")
+
+	// === ТЕСТ 2: GetAll ===
+	fmt.Println("\n=== Testing GetAll ===")
+
+	allOrders, err := repo.GetAll(context.Background())
+	if err != nil {
+		log.Fatal("❌ GetAll failed:", err)
+	}
+	fmt.Printf("✅ GetAll found %d orders\n", len(allOrders))
+
+	if len(allOrders) < 3 {
+		log.Fatal("❌ Should have at least 3 orders")
+	}
+
+	// Проверяем порядок (ORDER BY order_id)
+	for i := 0; i < len(allOrders)-1; i++ {
+		if allOrders[i].OrderID > allOrders[i+1].OrderID {
+			log.Fatal("❌ Orders should be sorted by order_id")
+		}
+	}
+	fmt.Println("✅ Orders are correctly sorted")
+
+	// === ТЕСТ 3: UpdateStatus ===
+	fmt.Println("\n=== Testing UpdateStatus ===")
+
+	// 3.1 Успешное обновление
+	err = repo.UpdateStatus(context.Background(), orderIDs[0], "paid")
+	if err != nil {
+		log.Fatal("❌ UpdateStatus failed:", err)
+	}
+
+	// Проверяем через GetByID
+	updatedOrder, _ := repo.GetByID(context.Background(), orderIDs[0])
+	if updatedOrder.Status != "paid" {
+		log.Fatal("❌ Status didn't change to 'paid'")
+	}
+	fmt.Println("✅ UpdateStatus changed status to 'paid'")
+
+	// 3.2 Несуществующий заказ
+	err = repo.UpdateStatus(context.Background(), 99999, "paid")
+	if err != repository.ErrNotFound {
+		log.Fatal("❌ UpdateStatus should return ErrNotFound")
+	}
+	fmt.Println("✅ UpdateStatus returns ErrNotFound correctly")
+
+	// 3.3 Невалидный статус
+	err = repo.UpdateStatus(context.Background(), orderIDs[1], "invalid_status")
+	if !errors.Is(err, repository.ErrInvalidInput) {
+		log.Fatal("❌ Should reject invalid status")
+	}
+	fmt.Println("✅ UpdateStatus validates status correctly")
+
+	// 3.4 Пустой статус
+	err = repo.UpdateStatus(context.Background(), orderIDs[1], "")
+	if !errors.Is(err, repository.ErrInvalidInput) {
+		log.Fatal("❌ Should reject empty status")
+	}
+	fmt.Println("✅ UpdateStatus rejects empty status")
+
+	// === ТЕСТ 4: GetByCustomerID ===
+	fmt.Println("\n=== Testing GetByCustomerID ===")
+
+	// 4.1 Заказы существующего клиента
+	customerOrders, err := repo.GetByCustomerID(context.Background(), testCustomer.CustomerID)
+	if err != nil {
+		log.Fatal("❌ GetByCustomerID failed:", err)
+	}
+	fmt.Printf("✅ Found %d orders for customer ID %d\n",
+		len(customerOrders), testCustomer.CustomerID)
+
+	if len(customerOrders) < 3 {
+		log.Fatal("❌ Should have 3 orders for test customer")
+	}
+
+	// Проверяем что все заказы этого клиента
+	for _, o := range customerOrders {
+		if o.CustomerID != testCustomer.CustomerID {
+			log.Fatal("❌ GetByCustomerID returned wrong customer's order")
+		}
+	}
+	fmt.Println("✅ All orders belong to correct customer")
+
+	// 4.2 Клиент без заказов (создадим нового)
+	newCustomer := &models.Customer{
+		Name:        "Беззаказный",
+		Email:       "no-orders@example.com",
+		PhoneNumber: "+79161112233",
+	}
+	customerRepo.Create(context.Background(), newCustomer)
+
+	emptyOrders, err := repo.GetByCustomerID(context.Background(), newCustomer.CustomerID)
+	if err != nil {
+		log.Fatal("❌ GetByCustomerID should work for customers without orders")
+	}
+	if len(emptyOrders) != 0 {
+		log.Fatal("❌ Should return empty slice for customer without orders")
+	}
+	fmt.Println("✅ GetByCustomerID returns empty slice correctly")
+
+	// 4.3 Невалидный customerID
+	_, err = repo.GetByCustomerID(context.Background(), 0)
+	if !errors.Is(err, repository.ErrInvalidInput) {
+		log.Fatal("❌ Should validate customerID")
+	}
+	fmt.Println("✅ GetByCustomerID validates customerID")
+
+	fmt.Println("\n=== Testing GetOrderWithItems ===")
+
+	// 1. Создаем тестовый продукт
+	productRepo := repository.NewProductRepository(conn)
+	testProduct := &models.Product{
+		Name:     "Тестовый товар для заказа",
+		Quantity: 100,
+		Price:    1500.00,
+		Category: "Тест",
+	}
+	productRepo.Create(context.Background(), testProduct)
+
+	// 2. Создаем заказ с товарами напрямую через SQL
+	var orderID int
+	conn.QueryRow(context.Background(),
+		`INSERT INTO orders (customer_id, total_amount, status)
+     VALUES ($1, $2, $3) RETURNING order_id`,
+		1, 5000.00, "created",
+	).Scan(&orderID)
+
+	// 3. Добавляем товары в заказ
+	conn.Exec(context.Background(),
+		`INSERT INTO order_items (order_id, product_id, quantity, price)
+     VALUES ($1, $2, $3, $4)`,
+		orderID, testProduct.ProductID, 2, 1500.00,
+	)
+
+	conn.Exec(context.Background(),
+		`INSERT INTO order_items (order_id, product_id, quantity, price)
+     VALUES ($1, $2, $3, $4)`,
+		orderID, testProduct.ProductID, 1, 2000.00,
+	)
+
+	fmt.Printf("✅ Created order with items: ID %d\n", orderID)
+
+	// 4. Тестируем GetOrderWithItems
+	order, items, err := repo.GetOrderWithItems(context.Background(), orderID)
+	if err != nil {
+		log.Fatal("❌ GetOrderWithItems failed:", err)
+	}
+
+	fmt.Printf("✅ Found order: ID %d, Status: %s\n", order.OrderID, order.Status)
+	fmt.Printf("✅ Found %d items in order:\n", len(items))
+	for i, item := range items {
+		fmt.Printf("   %d. ProductID: %d, Quantity: %d, Price: %.2f\n",
+			i+1, item.ProductID, item.Quantity, item.Price)
+	}
+
+	// 5. Тест: заказ без товаров (создаем новый заказ)
+	var emptyOrderID int
+	conn.QueryRow(context.Background(),
+		`INSERT INTO orders (customer_id, total_amount, status)
+     VALUES ($1, $2, $3) RETURNING order_id`,
+		1, 1000.00, "created",
+	).Scan(&emptyOrderID)
+
+	_, emptyItems, err := repo.GetOrderWithItems(context.Background(), emptyOrderID)
+	if err != nil {
+		log.Fatal("❌ GetOrderWithItems for empty order failed:", err)
+	}
+	if len(emptyItems) != 0 {
+		log.Fatal("❌ Empty order should have 0 items")
+	}
+	fmt.Println("✅ Empty order correctly returns 0 items")
+
+	// 6. Тест: несуществующий заказ
+	_, _, err = repo.GetOrderWithItems(context.Background(), 99999)
+	if err != repository.ErrNotFound {
+		log.Fatal("❌ Should return ErrNotFound for non-existent order")
+	}
+	fmt.Println("✅ Correctly returns ErrNotFound")
+
+	fmt.Println("\n🎉 GetOrderWithItems TESTS PASSED!")
+}
+
+// 	fmt.Println("\n=== Testing OrderRepository ===")
+
+// 	repo := repository.NewOrderRepository(conn)
+
+// 	// Сначала создаем тестовые данные
+// 	fmt.Println("Setting up test data...")
+
+// 	// 1. Создаем тестового клиента
+// 	customerRepo := repository.NewCustomerRepository(conn)
+// 	testCustomer := &models.Customer{
+// 		Name:        "Тестовый Клиент",
+// 		Email:       "test-order@example.com",
+// 		PhoneNumber: "+79169998877",
+// 	}
+// 	customerRepo.Create(context.Background(), testCustomer)
+
+// 	// 2. Создаем тестовые заказы напрямую через SQL
+// 	var orderIDs []int
+// 	for i := 1; i <= 3; i++ {
+// 		var orderID int
+// 		amount := float64(1000 * i)
+// 		conn.QueryRow(context.Background(),
+// 			`INSERT INTO orders (customer_id, total_amount, status)
+//              VALUES ($1, $2, $3) RETURNING order_id`,
+// 			testCustomer.CustomerID, amount, "created",
+// 		).Scan(&orderID)
+// 		orderIDs = append(orderIDs, orderID)
+// 	}
+
+// 	fmt.Printf("✅ Created test customer ID: %d\n", testCustomer.CustomerID)
+// 	fmt.Printf("✅ Created test orders IDs: %v\n", orderIDs)
+
+// 	// === ТЕСТ 1: GetByID ===
+// 	fmt.Println("\n=== Testing GetByID ===")
+
+// 	// 1.1 Существующий заказ
+// 	order, err := repo.GetByID(context.Background(), orderIDs[0])
+// 	if err != nil {
+// 		log.Fatal("❌ GetByID failed:", err)
+// 	}
+// 	fmt.Printf("✅ GetByID found order: ID %d, Status: %s, Amount: %.2f\n",
+// 		order.OrderID, order.Status, order.TotalAmount)
+
+// 	// 1.2 Несуществующий заказ
+// 	_, err = repo.GetByID(context.Background(), 99999)
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("❌ GetByID should return ErrNotFound for non-existent order")
+// 	}
+// 	fmt.Println("✅ GetByID correctly returns ErrNotFound")
+
+// 	// 1.3 Невалидный ID
+// 	_, err = repo.GetByID(context.Background(), 0)
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("❌ GetByID should validate ID")
+// 	}
+// 	fmt.Println("✅ GetByID validates ID correctly")
+
+// 	// === ТЕСТ 2: GetAll ===
+// 	fmt.Println("\n=== Testing GetAll ===")
+
+// 	allOrders, err := repo.GetAll(context.Background())
+// 	if err != nil {
+// 		log.Fatal("❌ GetAll failed:", err)
+// 	}
+// 	fmt.Printf("✅ GetAll found %d orders\n", len(allOrders))
+
+// 	if len(allOrders) < 3 {
+// 		log.Fatal("❌ Should have at least 3 orders")
+// 	}
+
+// 	// Проверяем порядок (ORDER BY order_id)
+// 	for i := 0; i < len(allOrders)-1; i++ {
+// 		if allOrders[i].OrderID > allOrders[i+1].OrderID {
+// 			log.Fatal("❌ Orders should be sorted by order_id")
+// 		}
+// 	}
+// 	fmt.Println("✅ Orders are correctly sorted")
+
+// 	// === ТЕСТ 3: UpdateStatus ===
+// 	fmt.Println("\n=== Testing UpdateStatus ===")
+
+// 	// 3.1 Успешное обновление
+// 	err = repo.UpdateStatus(context.Background(), orderIDs[0], "paid")
+// 	if err != nil {
+// 		log.Fatal("❌ UpdateStatus failed:", err)
+// 	}
+
+// 	// Проверяем через GetByID
+// 	updatedOrder, _ := repo.GetByID(context.Background(), orderIDs[0])
+// 	if updatedOrder.Status != "paid" {
+// 		log.Fatal("❌ Status didn't change to 'paid'")
+// 	}
+// 	fmt.Println("✅ UpdateStatus changed status to 'paid'")
+
+// 	// 3.2 Несуществующий заказ
+// 	err = repo.UpdateStatus(context.Background(), 99999, "paid")
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("❌ UpdateStatus should return ErrNotFound")
+// 	}
+// 	fmt.Println("✅ UpdateStatus returns ErrNotFound correctly")
+
+// 	// 3.3 Невалидный статус
+// 	err = repo.UpdateStatus(context.Background(), orderIDs[1], "invalid_status")
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("❌ Should reject invalid status")
+// 	}
+// 	fmt.Println("✅ UpdateStatus validates status correctly")
+
+// 	// 3.4 Пустой статус
+// 	err = repo.UpdateStatus(context.Background(), orderIDs[1], "")
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("❌ Should reject empty status")
+// 	}
+// 	fmt.Println("✅ UpdateStatus rejects empty status")
+
+// 	// === ТЕСТ 4: GetByCustomerID ===
+// 	fmt.Println("\n=== Testing GetByCustomerID ===")
+
+// 	// 4.1 Заказы существующего клиента
+// 	customerOrders, err := repo.GetByCustomerID(context.Background(), testCustomer.CustomerID)
+// 	if err != nil {
+// 		log.Fatal("❌ GetByCustomerID failed:", err)
+// 	}
+// 	fmt.Printf("✅ Found %d orders for customer ID %d\n",
+// 		len(customerOrders), testCustomer.CustomerID)
+
+// 	if len(customerOrders) < 3 {
+// 		log.Fatal("❌ Should have 3 orders for test customer")
+// 	}
+
+// 	// Проверяем что все заказы этого клиента
+// 	for _, o := range customerOrders {
+// 		if o.CustomerID != testCustomer.CustomerID {
+// 			log.Fatal("❌ GetByCustomerID returned wrong customer's order")
+// 		}
+// 	}
+// 	fmt.Println("✅ All orders belong to correct customer")
+
+// 	// 4.2 Клиент без заказов (создадим нового)
+// 	newCustomer := &models.Customer{
+// 		Name:        "Беззаказный",
+// 		Email:       "no-orders@example.com",
+// 		PhoneNumber: "+79161112233",
+// 	}
+// 	customerRepo.Create(context.Background(), newCustomer)
+
+// 	emptyOrders, err := repo.GetByCustomerID(context.Background(), newCustomer.CustomerID)
+// 	if err != nil {
+// 		log.Fatal("❌ GetByCustomerID should work for customers without orders")
+// 	}
+// 	if len(emptyOrders) != 0 {
+// 		log.Fatal("❌ Should return empty slice for customer without orders")
+// 	}
+// 	fmt.Println("✅ GetByCustomerID returns empty slice correctly")
+
+// 	// 4.3 Невалидный customerID
+// 	_, err = repo.GetByCustomerID(context.Background(), 0)
+// 	if !errors.Is(err, repository.ErrInvalidInput) {
+// 		log.Fatal("❌ Should validate customerID")
+// 	}
+// 	fmt.Println("✅ GetByCustomerID validates customerID")
+
+// 	fmt.Println("\n=== Testing GetOrderWithItems ===")
+
+// 	// 1. Создаем тестовый продукт
+// 	productRepo := repository.NewProductRepository(conn)
+// 	testProduct := &models.Product{
+// 		Name:     "Тестовый товар для заказа",
+// 		Quantity: 100,
+// 		Price:    1500.00,
+// 		Category: "Тест",
+// 	}
+// 	productRepo.Create(context.Background(), testProduct)
+
+// 	// 2. Создаем заказ с товарами напрямую через SQL
+// 	var orderID int
+// 	conn.QueryRow(context.Background(),
+// 		`INSERT INTO orders (customer_id, total_amount, status)
+//      VALUES ($1, $2, $3) RETURNING order_id`,
+// 		1, 5000.00, "created",
+// 	).Scan(&orderID)
+
+// 	// 3. Добавляем товары в заказ
+// 	conn.Exec(context.Background(),
+// 		`INSERT INTO order_items (order_id, product_id, quantity, price)
+//      VALUES ($1, $2, $3, $4)`,
+// 		orderID, testProduct.ProductID, 2, 1500.00,
+// 	)
+
+// 	conn.Exec(context.Background(),
+// 		`INSERT INTO order_items (order_id, product_id, quantity, price)
+//      VALUES ($1, $2, $3, $4)`,
+// 		orderID, testProduct.ProductID, 1, 2000.00,
+// 	)
+
+// 	fmt.Printf("✅ Created order with items: ID %d\n", orderID)
+
+// 	// 4. Тестируем GetOrderWithItems
+// 	order, items, err := repo.GetOrderWithItems(context.Background(), orderID)
+// 	if err != nil {
+// 		log.Fatal("❌ GetOrderWithItems failed:", err)
+// 	}
+
+// 	fmt.Printf("✅ Found order: ID %d, Status: %s\n", order.OrderID, order.Status)
+// 	fmt.Printf("✅ Found %d items in order:\n", len(items))
+// 	for i, item := range items {
+// 		fmt.Printf("   %d. ProductID: %d, Quantity: %d, Price: %.2f\n",
+// 			i+1, item.ProductID, item.Quantity, item.Price)
+// 	}
+
+// 	// 5. Тест: заказ без товаров (создаем новый заказ)
+// 	var emptyOrderID int
+// 	conn.QueryRow(context.Background(),
+// 		`INSERT INTO orders (customer_id, total_amount, status)
+//      VALUES ($1, $2, $3) RETURNING order_id`,
+// 		1, 1000.00, "created",
+// 	).Scan(&emptyOrderID)
+
+// 	_, emptyItems, err := repo.GetOrderWithItems(context.Background(), emptyOrderID)
+// 	if err != nil {
+// 		log.Fatal("❌ GetOrderWithItems for empty order failed:", err)
+// 	}
+// 	if len(emptyItems) != 0 {
+// 		log.Fatal("❌ Empty order should have 0 items")
+// 	}
+// 	fmt.Println("✅ Empty order correctly returns 0 items")
+
+// 	// 6. Тест: несуществующий заказ
+// 	_, _, err = repo.GetOrderWithItems(context.Background(), 99999)
+// 	if err != repository.ErrNotFound {
+// 		log.Fatal("❌ Should return ErrNotFound for non-existent order")
+// 	}
+// 	fmt.Println("✅ Correctly returns ErrNotFound")
+
+// 	fmt.Println("\n🎉 GetOrderWithItems TESTS PASSED!")
+// }
 
 // func testCustomerRepository(conn *pgx.Conn) {
 // 	repo := repository.NewCustomerRepository(conn)

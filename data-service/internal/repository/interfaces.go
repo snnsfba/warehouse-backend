@@ -26,3 +26,19 @@ type CustomerRepository interface {
 	GetByEmail(ctx context.Context, email string) (*models.Customer, error)
 	GetByPhoneNumber(ctx context.Context, phoneNumber string) (*models.Customer, error)
 }
+
+type OrderRepository interface {
+	CreateOrder(ctx context.Context, order *models.Order, items []models.OrderItem) error
+	GetByID(ctx context.Context, id int) (*models.Order, error)
+	GetAll(ctx context.Context) ([]models.Order, error)
+	UpdateStatus(ctx context.Context, id int, status string) error
+
+	GetByCustomerID(ctx context.Context, customerID int) ([]models.Order, error)
+	GetOrderWithItems(ctx context.Context, id int) (*models.Order, []models.OrderItem, error)
+}
+
+type OperationRepository interface {
+	Create(ctx context.Context, operation *models.Operation) error
+	GetByProductID(ctx context.Context, productID int) ([]models.Operation, error)
+	GetByOrderID(ctx context.Context, orderID int) ([]models.Operation, error)
+}
