@@ -41,7 +41,7 @@ type OrderItem struct {
 type Operation struct {
 	OperationID   int       `json:"operation_id"`
 	ProductID     int       `json:"product_id"`
-	OrderID       int       `json:"order_id"`
+	OrderID       *int      `json:"order_id,omitempty"`
 	OperationType string    `json:"operation_type"`
 	ChangeQuant   int       `json:"change_quant"`
 	CreatedAt     time.Time `json:"created_at"`

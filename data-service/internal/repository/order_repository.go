@@ -30,7 +30,7 @@ func (r *orderRepo) CreateOrder(ctx context.Context, order *models.Order, items 
 	}
 
 	if order.CustomerID <= 0 {
-		return fmt.Errorf("%w: ID cannot be empty", ErrInvalidInput)
+		return fmt.Errorf("%w: ID must be positive", ErrInvalidInput)
 	}
 
 	if len(items) == 0 {

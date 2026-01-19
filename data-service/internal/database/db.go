@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func Connect(cfg *Config) (*pgx.Conn, error) {
+func ConnectDB(cfg *Config) (*pgx.Conn, error) {
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		cfg.Host,
