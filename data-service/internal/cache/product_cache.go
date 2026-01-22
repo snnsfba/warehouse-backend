@@ -35,10 +35,15 @@ func (c *CachedProductRepository) GetByID(ctx context.Context, id int) (*models.
 	switch {
 	case err == nil:
 		if string(data) == "notfound" {
-			return nil, fmt.Errorf("product not found")
+			return nil, repository.ErrNotFound
 		}
+
 		var product models.Product
-		json.Unmarshal(data, &product)
+		if err := json.Unmarshal(data, &product); err != nil {
+			log.Printf("Failed to unmarshal cached product (continuing with DB): %v", err)
+			break
+		}
+
 		return &product, nil
 
 	case errors.Is(err, redis.Nil):
